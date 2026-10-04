@@ -15,8 +15,8 @@ apply for an account, log in, get to a page behind a menu. The decision model is
 form takes six to ten steps without any LLM call.
 
 Do not use `browse` for reading a page (fetch it), for anything behind a login the session does not
-have, or for anything that needs a CAPTCHA, a canvas, drag and drop, or a custom dropdown that only
-opens with the keyboard.
+have, or for anything that needs a CAPTCHA, a canvas, drag and drop, or an image-grid check you do not expect the fallback model to read. Embedded frames, canvases, drag and drop and keyboard-only menus are
+reached through the fallback model, one step at a time.
 
 ## Calling browse
 
@@ -70,6 +70,7 @@ Use these when `browse` did not finish the job, or when you want precise control
 2. `click(index=5, allow_writes=true)`, `type(index=2, text="...", allow_writes=true)`,
    `select(index=3, option="Tools", allow_writes=true)`.
 3. `scroll(direction="down")` for content below the fold, `goto(url)`, `back()`, `press(key="Enter")`.
+   For anything with no number on the screenshot use `click_at(x, y)` and `drag(x, y, to_x, to_y)` in the pixels of the last `look()` image.
 4. `browse` again for whatever is left, with the same facts.
 
 Every index comes from the last `look()`. After any page change the numbers move, so call `look()`

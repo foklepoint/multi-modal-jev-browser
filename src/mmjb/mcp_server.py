@@ -210,10 +210,35 @@ async def back() -> str:
 
 @tool()
 @safe
-async def press(key: str) -> str:
-    """Press a key such as Enter, Tab or Escape on the current page."""
+async def click_at(x: float, y: float, allow_writes: bool = False) -> str:
+    """Click a point of the viewport, in the pixels of the screenshot from look(). For canvases, challenge widgets and anything with no numbered element."""
     async with LOCK:
         SESSION["browser"] = await _browser()
+        SESSION["allow_writes"] = SESSION.get("allow_writes", False) or allow_writes
+        agent = _agent()
+        effect, _observation = await agent.simple_action("click_at", x=x, y=y)
+        return effect
+
+
+@tool()
+@safe
+async def drag(x: float, y: float, to_x: float, to_y: float, allow_writes: bool = False) -> str:
+    """Press at one point of the viewport, move to another and release: sliders, sortable lists, drag and drop."""
+    async with LOCK:
+        SESSION["browser"] = await _browser()
+        SESSION["allow_writes"] = SESSION.get("allow_writes", False) or allow_writes
+        agent = _agent()
+        effect, _observation = await agent.simple_action("drag", x=x, y=y, x2=to_x, y2=to_y)
+        return effect
+
+
+@tool()
+@safe
+async def press(key: str, allow_writes: bool = False) -> str:
+    """Press a key such as Enter, ArrowDown, Tab or Escape on the current page, for menus and dropdowns that open from the keyboard."""
+    async with LOCK:
+        SESSION["browser"] = await _browser()
+        SESSION["allow_writes"] = SESSION.get("allow_writes", False) or allow_writes
         agent = _agent()
         effect, _observation = await agent.simple_action("press", text=key)
         return effect

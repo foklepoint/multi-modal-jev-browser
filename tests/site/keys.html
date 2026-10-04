@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Keyboard menu</title>
+<style>
+  body { font-family: Arial; margin: 40px }
+  #plan { width: 240px; padding: 10px; border: 1px solid #888; background: #fff }
+  #list { display: none; margin-top: 4px; width: 240px; border: 1px solid #ccc }
+  #list div { padding: 8px }
+  #list div.on { background: #cfe0ff }
+</style></head>
+<body>
+<p id="out">Plan: none</p>
+<div id="plan" role="combobox" tabindex="0" aria-label="Choose a plan" aria-expanded="false">Choose a plan</div>
+<div id="list"><div>Starter</div><div>Team</div><div>Business</div></div>
+<script>
+  var plan = document.getElementById('plan');
+  var list = document.getElementById('list');
+  var items = Array.from(list.children);
+  var at = -1;
+  function show() {
+    list.style.display = 'block';
+    plan.setAttribute('aria-expanded', 'true');
+    items.forEach(function (item, i) { item.className = i === at ? 'on' : ''; });
+  }
+  plan.addEventListener('keydown', function (event) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      at = Math.min(at + 1, items.length - 1);
+      show();
+    } else if (event.key === 'Enter' && at >= 0) {
+      event.preventDefault();
+      plan.textContent = items[at].textContent;
+      document.getElementById('out').textContent = 'Plan: ' + items[at].textContent;
+      list.style.display = 'none';
+    }
+  });
+</script>
+</body></html>

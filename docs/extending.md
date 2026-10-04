@@ -140,8 +140,15 @@ The action is one of:
 | `goto` | opens `url` (or `fact` if there is no `url`) |
 | `wait` | waits about a second |
 | `back` | goes back in the tab's history |
+| `press` | presses the key named by `key` (a key name such as `ArrowDown`, `Enter` or `Tab`) |
+| `click_at` | clicks the point `x`, `y`, in pixels of the plain screenshot (the second image) |
+| `drag` | presses at `x`, `y`, moves to `x2`, `y2` and releases |
 | `done` | checks the page for a confirmation and stops if it finds one |
 | `blocked` | stops the run with outcome `blocked` |
+
+`images` holds the numbered screenshot and, when the agent has a browser, the same page with no boxes drawn on it. `state["scroll"]` has
+`viewport_width` and `viewport_height`, the size of both images. Points, drags and key presses count as writes: they are refused while
+`allow_writes` is off.
 
 `state` also carries `reason_you_are_asked`, so the fallback knows why it was woken up, and
 `unconfirmed_done_claim` when a DONE claim could not be proved. `cost` is added to the run total and

@@ -33,12 +33,12 @@ The cost and time rows are the measured cost and time per step multiplied by the
 
 | | |
 | --- | --- |
-| Runs as | a CLI (`mmjb`), a Python library (`Agent`) and an MCP server (`mmjb-mcp`, 11 tools) |
+| Runs as | a CLI (`mmjb`), a Python library (`Agent`) and an MCP server (`mmjb-mcp`, 13 tools) |
 | Decision models | Clef on Cloudflare Workers AI, Jev on OpenRouter, any LiteLLM vision model, or your own class in 20 lines |
 | Fallback | any LiteLLM model; default DeepSeek v4.1 Flash |
 | Each step sends | a screenshot with a numbered box on every control, the element list with roles and values, the page text, your facts and what the last actions did |
 | Handles | new tabs and popups, dropdowns with 40 options, checkboxes, radios, forms that scroll, buttons that stay disabled until the form is valid, confirmations that vanish on reload |
-| Does not handle | CAPTCHAs, canvas apps, drag and drop, content inside iframes, custom dropdowns that need the keyboard |
+| Reaches | controls inside embedded frames, numbered like any other; canvases, drag and drop, sliders and menus that open from the keyboard, through click at a point, drag and key presses; tick-box and image-tile challenge widgets, by position |
 | Safety | writes are off by default, destructive verbs are refused unless the goal names them, page text is treated as data |
 | Install | `uvx --from git+https://github.com/foklepoint/multi-modal-jev-browser mmjb-mcp` |
 | Check the setup | `mmjb doctor` prints a pass or fail per check with the exact fix |
@@ -117,7 +117,9 @@ Tools:
 | `scroll(direction)` | down, up, top or bottom |
 | `goto(url)` | opens a URL in the agent's tab |
 | `back()` | goes back in the tab's history |
-| `press(key)` | Enter, Tab, Escape and anything else |
+| `press(key, allow_writes)` | Enter, ArrowDown, Tab, Escape and anything else, for menus that open from the keyboard |
+| `click_at(x, y, allow_writes)` | clicks a point of the viewport, in the pixels of the screenshot from `look()` |
+| `drag(x, y, to_x, to_y, allow_writes)` | presses at one point, moves to another and releases |
 | `status()` | the current URL, the models in use and how much work has been done |
 | `doctor()` | the same report as `mmjb doctor`, as a tool |
 
@@ -193,25 +195,30 @@ packages can publish deciders and fallbacks under the `mmjb.deciders` and `mmjb.
 point groups, so `pip install some-plugin` adds one with no change to this repository. Worked examples
 for all four are in `docs/extending.md` and in `examples/`.
 
-## Limits
+## What it reaches, and what it does not
 
-It cannot do these things, and there is no point pretending otherwise:
+The decision model works on numbered elements. Anything it cannot name that way goes to the fallback model, which sees the plain screenshot and can act on pixels and keys.
 
-- custom dropdowns that need keyboard handling to open, because it only sees the DOM controls a
-  button click would reach
-- canvas applications, games and anything drawn in pixels rather than in HTML
-- CAPTCHAs and browser verification challenges
-- drag and drop
+| situation | how it is handled | tested |
+| --- | --- | --- |
+| a control inside an embedded frame | read and numbered with the page's own controls, drawn on the screenshot, clicked and typed into like any other; the frame's text is part of the page text | a local page with a form in a frame; Jev fills and saves it in 3 steps |
+| a canvas, or a page with no HTML controls | the fallback clicks a point (`click_at`) from the plain screenshot | a local canvas; the click lands where the model aimed |
+| drag and drop, sliders | the fallback drags from one point to another (`drag`) | a local drop zone |
+| a menu or dropdown that opens from the keyboard | the fallback clicks it, then sends key presses (`press`), one per step | a local keyboard-only menu; it picked the right item |
+| a tick-box or image-tile challenge widget | by position, with the fallback model reading the tiles | a local red-squares grid, solved in 10 steps. Real CAPTCHA services are built to resist automation, so success depends on the model and the site, and invisible or behavioural checks can still block a run |
+
+What it does not do:
+
 - anything behind a login it has no credentials for
-- reading a file input the page never shows as a control
+- pages that need a second device, an email link or a phone code
+- a model that cannot see well enough to aim: coordinates come from the fallback model, so a weak model misses small targets
 - file uploads are implemented (a `file:` fact and `set_input_files`) but only covered by the safety tests, not by an end-to-end run
 
-It also works in the viewport. Content below the fold is listed as an offscreen control and reached by
-scrolling to it, one step at a time.
+It works in the viewport. Content below the fold is listed as an offscreen control and reached by scrolling to it, one step at a time.
 
 ## Safety
 
-- `allow_writes` is false by default. Nothing is typed, selected or uploaded, and no submit, send,
+- `allow_writes` is false by default. Nothing is typed, selected, uploaded, clicked at a point, dragged or sent as a key press, and no submit, send,
   save, post or publish button is clicked, until it is on.
 - Even with `allow_writes` on, delete, remove, log out, pay, buy, upgrade, subscribe and checkout are
   refused unless the goal itself contains that word.

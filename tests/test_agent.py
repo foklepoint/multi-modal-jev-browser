@@ -82,20 +82,15 @@ async def test_a_control_clicked_three_times_with_no_effect_is_hidden(browser, s
 @pytest.mark.slow
 async def test_scrolling_leaves_the_menu_when_it_takes_over(browser, site):
     decider = ScriptedDecider("scroll")
-    agent = build_agent(browser, decider, FakeFallback(), goal="Read the long page", max_steps=12)
+    fallback = FakeFallback()
+    agent = build_agent(browser, decider, fallback, goal="Read the long page", max_steps=12)
     await agent.run(start_url=site + "/tall.html")
 
-    scroll_names = ("SCROLL_DOWN", "SCROLL_UP", "SCROLL_TO")
-    quiet = []
-    for position, menu in enumerate(decider.offered_operation_menus()):
-        # A menu of None means the only operation left had one option and was answered locally.
-        offered_scrolls = [name for name in (menu or []) if name in scroll_names]
-        if offered_scrolls:
-            continue
-        earlier = decider.picked[max(0, position - 8):position]
-        if len(earlier) == 8 and earlier.count("SCROLL_DOWN") >= 6:
-            quiet.append(position)
-    assert quiet, "scrolling never left the operation menu after 6 of 8 steps"
+    # The page has no controls, so once 6 of the last 8 steps were scrolls the menu holds nothing but waiting and going back.
+    # No operation on an element is left, so the fallback decides those steps and the decision model is not asked.
+    assert decider.picked[:6].count("SCROLL_DOWN") == 6, "the scripted decision model should have scrolled six times first"
+    assert fallback.calls, "when scrolling left the menu nothing was left but waiting, so the fallback should have been asked"
+    assert any("only operation left" in call["reason"] for call in fallback.calls)
 
 
 @pytest.mark.slow

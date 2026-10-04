@@ -116,9 +116,9 @@ def mentions(text: str, word: str) -> bool:
 
 def refusal_reason(action: str, label: str, goal: str, allow_writes: bool) -> str:
     """Why this action on this element is refused, or an empty string when it is allowed."""
-    if action in ("type", "select", "upload"):
+    if action in ("type", "select", "upload", "click_at", "drag", "press"):
         if not allow_writes:
-            return "typing, selecting and uploading are off until allow_writes is on"
+            return "typing, selecting, uploading, clicking at a point, dragging and key presses are off until allow_writes is on"
         return ""
     words = ALWAYS_BLOCKED_VERBS if allow_writes else WRITE_VERBS
     for word in words:
@@ -242,6 +242,18 @@ class _Action:
     reason: str = ""
     margin: float = 0.0
     element: Element | None = None
+    x: float = 0.0
+    y: float = 0.0
+    x2: float = 0.0
+    y2: float = 0.0
+    key: str = ""
+
+
+# The operations that act on a numbered element. A menu with none of them leaves the decision model nothing useful to choose.
+ELEMENT_OPERATIONS = {"CLICK", "TYPE_TEXT", "SELECT", "UPLOAD_FILE", "SCROLL_TO"}
+
+# Operations that act on a point or on the keyboard instead of on a numbered element. Only the fallback chooses them.
+POINT_OPERATIONS = {"CLICK_AT": "click_at", "DRAG": "drag", "PRESS": "press"}
 
 
 class Agent:
@@ -646,6 +658,11 @@ class Agent:
         request = dict(state)
         request["reason_you_are_asked"] = reason
         request["allow_writes"] = self.allow_writes
+        if self.browser is not None:
+            # The fallback may click at a point, so it also gets the page without the boxes drawn over it.
+            plain = await self.browser.screenshot()
+            if plain:
+                images = list(images) + [data_uri(plain)]
         if extra:
             request.update(extra)
         try:
@@ -677,10 +694,25 @@ class Agent:
             "scroll_up": "SCROLL_UP",
             "wait": "WAIT",
             "back": "GO_BACK",
+            "press": "PRESS",
+            "click_at": "CLICK_AT",
+            "drag": "DRAG",
             "done": "DONE",
             "blocked": "BLOCKED",
         }
         operation = mapping.get(action, "BLOCKED")
+        if operation == "PRESS":
+            key = str(answer.get("key") or "")
+            if not re.fullmatch(r"[A-Za-z0-9+_ ]{1,30}", key):
+                return _Action(operation="BLOCKED", reason="the fallback named no usable key")
+            return _Action(operation="PRESS", key=key, reason=why)
+        if operation in ("CLICK_AT", "DRAG"):
+            try:
+                x, y = float(answer["x"]), float(answer["y"])
+                x2, y2 = (float(answer["x2"]), float(answer["y2"])) if operation == "DRAG" else (0.0, 0.0)
+            except (KeyError, TypeError, ValueError):
+                return _Action(operation="BLOCKED", reason="the fallback gave no usable coordinates")
+            return _Action(operation=operation, x=x, y=y, x2=x2, y2=y2, reason=why)
         if operation in ("CLICK", "TYPE_TEXT", "SELECT", "UPLOAD_FILE"):
             if not index_number:
                 return _Action(operation="BLOCKED", reason="the fallback named no element index")
@@ -803,24 +835,37 @@ class Agent:
             self.notes.append("step " + str(step_number) + ": no operation the safety rules allow on this page")
             return ("blocked", observation, _Action(operation="BLOCKED", reason="nothing is allowed here"))
 
-        if not allowed and not observation.offscreen_controls and list(operations) == ["WAIT"]:
-            # A page with nothing to press (about:blank, a PDF, a dead frame): waiting will not help.
+        # With no element to click, type into or select, the decision model's menu is only waiting, going back and scrolling, which are all bad
+        # answers on a canvas, a keyboard menu or a widget drawn in pixels. The fallback can look at the pixels, so it decides those steps.
+        wait_only = not (set(operations) & ELEMENT_OPERATIONS)
+        no_controls = wait_only and not allowed and not observation.offscreen_controls
+        if no_controls and (self.fallback is None or observation.url in ("about:blank", "")):
+            # A page with nothing to press and nothing drawn on it (about:blank): waiting will not help.
             self.notes.append("step " + str(step_number) + ": the page has no controls at all, so there is nothing to wait for")
             return ("blocked", observation, _Action(operation="BLOCKED", reason="the page has no controls"))
 
         source = "decider"
         action = _Action(operation="BLOCKED")
-        asked, local_answers = prepare_questions(questions)
-        self.decider_calls += 1
-        try:
-            answers = self.coerce_answers(await self.decider.decide(state, asked, images))
-            for key, answer in local_answers.items():
-                answers.setdefault(key, answer)
-        except Exception as error:
-            self.notes.append("the decision model failed: " + str(error)[:200])
+        answers: dict[str, Answer] = {}
+        if wait_only and self.fallback is not None:
+            # Nothing to number, or nothing the facts can fill: a canvas, a widget drawn in pixels, a menu that opens from the keyboard.
+            # Only the fallback can look at the pixels, click a point or press a key.
             source = "fallback"
-            action = await self.ask_fallback(state, images, "the decision model failed: " + str(error)[:160])
-            answers = {}
+            action = await self.ask_fallback(
+                state, images, "the only operation left is waiting; the page may be a canvas, a challenge widget, a keyboard menu or content the element list cannot name"
+            )
+        else:
+            asked, local_answers = prepare_questions(questions)
+            self.decider_calls += 1
+            try:
+                answers = self.coerce_answers(await self.decider.decide(state, asked, images))
+                for key, answer in local_answers.items():
+                    answers.setdefault(key, answer)
+            except Exception as error:
+                self.notes.append("the decision model failed: " + str(error)[:200])
+                source = "fallback"
+                action = await self.ask_fallback(state, images, "the decision model failed: " + str(error)[:160])
+                answers = {}
 
         if source == "decider":
             done = answers.get("goal_done")
@@ -882,6 +927,12 @@ class Agent:
                 return ("verified", observation, action)
             self.unconfirmed_done += 1
             if self.unconfirmed_done >= MAX_UNCONFIRMED_DONE:
+                if source == "fallback" and self.made_a_difference():
+                    # Goals like "drag the box into the zone" end with no thank-you text. A vision LLM that looked at the page and said the goal
+                    # was met twice, after steps that changed the page, is evidence enough.
+                    record.effect = "the fallback model said the goal was met twice and the page changed during the run"
+                    self.record(record)
+                    return ("verified", observation, action)
                 self.record(record)
                 return ("unverified", observation, action)
             self.record(record)
@@ -914,13 +965,18 @@ class Agent:
         if element is None and action.index:
             element = observation.by_index(action.index)
         refusal = ""
+        kind = ""
         if element is not None:
-            refusal = refusal_reason(self._safety_action(self._kind_of(action, element)), element.label, self.goal, self.allow_writes)
+            kind = self._safety_action(self._kind_of(action, element))
+        elif action.operation in POINT_OPERATIONS:
+            kind = POINT_OPERATIONS[action.operation]
+        if kind:
+            refusal = self.refusal_for(kind, element)
         record = StepRecord(
             step=step_number,
             source=source,
             operation=action.operation,
-            element=(element.label if element is not None else ""),
+            element=(element.label if element is not None else self._point_label(action)),
             margin=action.margin,
             url=observation.url,
             index=action.index,
@@ -931,7 +987,7 @@ class Agent:
             record.effect = "refused: " + refusal
             self.record(record)
             self.stall += 1
-            return ("", await self.ensure_browser().observe())
+            return ("", await (await self.ensure_browser()).observe())
 
         browser = await self.ensure_browser()
         try:
@@ -960,6 +1016,36 @@ class Agent:
             if self.dead_clicks[key] >= REPEATS_BEFORE_HIDE:
                 self.banned[key] = step_number + HIDE_STEPS
         return ("", after)
+
+    def made_a_difference(self) -> bool:
+        """True when some step of this run changed the page: not a wait, a refusal or a failure."""
+        for record in self.history:
+            if record.operation in ("DONE", "BLOCKED"):
+                continue
+            if not record.effect or nothing_changed(record.effect):
+                continue
+            if record.effect.startswith(("refused", "the action failed")):
+                continue
+            return True
+        return False
+
+    def refusal_for(self, kind: str, element: Element | None) -> str:
+        """Why the safety rule in force refuses this kind of action on this element, or an empty string. A custom policy replaces the built-in rules."""
+        policy = self.policy_for()
+        if policy(kind, element, self.goal):
+            return ""
+        label = element.label if element is not None else ""
+        return refusal_reason(kind, label, self.goal, self.allow_writes) or "the safety policy refuses this"
+
+    @staticmethod
+    def _point_label(action: _Action) -> str:
+        if action.operation == "CLICK_AT":
+            return f"point ({action.x:.0f}, {action.y:.0f})"
+        if action.operation == "DRAG":
+            return f"drag ({action.x:.0f}, {action.y:.0f}) to ({action.x2:.0f}, {action.y2:.0f})"
+        if action.operation == "PRESS":
+            return f"key {action.key}"
+        return ""
 
     @staticmethod
     def _kind_of(action: _Action, element: Element) -> str:
@@ -1003,6 +1089,12 @@ class Agent:
             moved = await browser.scroll_to_label(action.url)
             if not moved:
                 await browser.scroll("down")
+        elif action.operation == "CLICK_AT":
+            await browser.click_at(action.x, action.y)
+        elif action.operation == "DRAG":
+            await browser.drag(action.x, action.y, action.x2, action.y2)
+        elif action.operation == "PRESS":
+            await browser.press(action.key)
         elif action.operation == "GO_BACK":
             await browser.go_back()
         elif action.operation == "GOTO":
@@ -1216,17 +1308,18 @@ class Agent:
         self.last_screenshot = screenshot
         return (observation, screenshot)
 
-    async def simple_action(self, action: str, index: int = 0, text: str = "", url: str = "") -> tuple[str, Observation]:
+    async def simple_action(
+        self, action: str, index: int = 0, text: str = "", url: str = "", x: float = 0.0, y: float = 0.0, x2: float = 0.0, y2: float = 0.0
+    ) -> tuple[str, Observation]:
         """Do one thing on the page, for the click, type, select, scroll, goto, back and press tools."""
         browser = await self.ensure_browser()
         observation = await browser.observe()
         before = Snapshot.of(observation)
         policy = self.policy_for()
-        kind = {"click": "click", "type": "type", "select": "select"}.get(action, "click")
+        kind = {"click": "click", "type": "type", "select": "select", "click_at": "click_at", "drag": "drag", "press": "press"}.get(action, "click")
         element = observation.by_index(index) if index else None
-        if element is not None and not policy(kind, element, self.goal):
-            label = element.label
-            reason = refusal_reason(kind, label, self.goal, self.allow_writes)
+        if (element is not None or action in ("click_at", "drag", "press")) and not policy(kind, element, self.goal):
+            reason = self.refusal_for(kind, element)
             return (f"refused: {reason}. Set allow_writes=true if the goal really needs this.", observation)
         if action == "click":
             await browser.click(index)
@@ -1242,8 +1335,12 @@ class Agent:
             await browser.go_back()
         elif action == "press":
             await browser.press(text)
+        elif action == "click_at":
+            await browser.click_at(x, y)
+        elif action == "drag":
+            await browser.drag(x, y, x2, y2)
         else:
-            return (f"'{action}' is not one of click, type, select, scroll, goto, back, press.", observation)
+            return (f"'{action}' is not one of click, type, select, scroll, goto, back, press, click_at, drag.", observation)
         new_tab = await self._settle_and_follow()
         after = await self._safe_observe()
         self.observation = after

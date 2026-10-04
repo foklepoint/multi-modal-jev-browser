@@ -15,7 +15,8 @@ MAX_OFFSCREEN = 25
 MAX_OPTIONS = 60
 
 OBSERVE_JS = r"""
-(() => {
+((options) => {
+  const startAt = (options && options.start) || 0;
   const clean = (value) => (value || '').replace(/\s+/g, ' ').trim();
   const SELECTOR = [
     'a[href]', 'button', 'input', 'textarea', 'select', 'summary',
@@ -159,7 +160,7 @@ OBSERVE_JS = r"""
   const offscreen = [];
   const disabledControls = [];
   const controlState = [];
-  let index = 0;
+  let index = startAt;
   let dropped = 0;
 
   for (const element of candidates) {
@@ -221,7 +222,7 @@ OBSERVE_JS = r"""
     element_count: index,
     dropped_elements: dropped
   };
-})()
+})
 """
 
 
@@ -240,6 +241,7 @@ class Element:
     options: list[str] = field(default_factory=list)
     clicked_without_effect: int = 0
     options_removed: list[str] = field(default_factory=list)
+    frame: int = 0  # 0 is the page itself; 1 and up are embedded frames, in the order they were read
 
     def as_state(self) -> dict[str, Any]:
         """The element as the decision models see it."""
@@ -258,6 +260,8 @@ class Element:
             record["options"] = self.options
         if self.clicked_without_effect:
             record["clicked_without_effect"] = self.clicked_without_effect
+        if self.frame:
+            record["in_embedded_frame"] = True
         return record
 
     def describe(self) -> str:
@@ -273,7 +277,20 @@ class Element:
             bits.append("(required)")
         if self.clicked_without_effect:
             bits.append(f"(clicked {self.clicked_without_effect}x with no effect)")
+        if self.frame:
+            bits.append("(in an embedded frame)")
         return " ".join(bits)
+
+
+@dataclass
+class FrameInfo:
+    """An embedded frame whose controls were read: where it sits on the page and the Playwright frame to act in."""
+
+    position: int
+    url: str
+    x: float
+    y: float
+    frame: Any = None
 
 
 @dataclass
@@ -291,6 +308,7 @@ class Observation:
     text_length: int = 0
     element_count: int = 0
     dropped_elements: int = 0
+    frames: list[FrameInfo] = field(default_factory=list)
 
     def by_index(self, index: int) -> Element | None:
         for element in self.elements:
@@ -368,12 +386,65 @@ def observation_from_dict(raw: dict[str, Any]) -> Observation:
     )
 
 
+MIN_FRAME_WIDTH = 40
+MIN_FRAME_HEIGHT = 24
+MAX_FRAME_TEXT = 3000
+MAX_FRAMES = 8
+
+
+async def add_frames(page: Any, observation: Observation) -> None:
+    """Read the controls and the text inside embedded frames (sign-in boxes, form builders, challenge widgets).
+
+    A frame counts when it is attached, big enough to hold a control and on screen. Its elements get the next
+    numbers, so one numbered list covers the page and its frames, and its text is added to the page text."""
+    viewport = page.viewport_size or {"width": 1280, "height": 800}
+    start = observation.element_count
+    for frame in page.frames:
+        if frame == page.main_frame or len(observation.frames) >= MAX_FRAMES:
+            continue
+        try:
+            if frame.is_detached():
+                continue
+            holder = await frame.frame_element()
+            box = await holder.bounding_box()
+        except Exception:
+            continue
+        if not box or box["width"] < MIN_FRAME_WIDTH or box["height"] < MIN_FRAME_HEIGHT:
+            continue
+        if box["x"] >= viewport["width"] or box["x"] + box["width"] <= 0 or box["y"] >= viewport["height"] or box["y"] + box["height"] <= 0:
+            continue
+        try:
+            raw = await frame.evaluate(OBSERVE_JS, {"start": start})
+        except Exception:
+            continue
+        if not isinstance(raw, dict):
+            continue
+        records = raw.get("elements") or []
+        text = str(raw.get("text") or "").strip()
+        if not records and not text:
+            continue
+        position = len(observation.frames) + 1
+        for record in records:
+            element = _row_to_element(record)
+            element.frame = position
+            observation.elements.append(element)
+        observation.frames.append(FrameInfo(position=position, url=str(raw.get("url") or ""), x=box["x"], y=box["y"], frame=frame))
+        observation.control_state.extend([list(row) for row in (raw.get("control_state") or [])])
+        if text:
+            observation.text += "\n[embedded frame " + str(raw.get("url") or "")[:80] + "] " + text[:MAX_FRAME_TEXT]
+            observation.text_length += len(text)
+        start = max(start, int(raw.get("element_count") or start))
+        observation.element_count = start
+
+
 async def observe(page: Any) -> Observation:
-    """Read the page that is in front of the browser right now."""
-    raw = await page.evaluate(OBSERVE_JS)
+    """Read the page that is in front of the browser right now, including the frames embedded in it."""
+    raw = await page.evaluate(OBSERVE_JS, {"start": 0})
     if not isinstance(raw, dict):
         raise RuntimeError("the page returned no observation; the tab may have navigated")
-    return observation_from_dict(raw)
+    observation = observation_from_dict(raw)
+    await add_frames(page, observation)
+    return observation
 
 
 def data_uri(raw_bytes: bytes, kind: str = "jpeg") -> str:

@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Canvas</title>
+<style>body { margin: 0; font-family: Arial } #c { position: absolute; left: 100px; top: 100px; width: 400px; height: 200px; background: #dde6ff } #out { position: absolute; left: 100px; top: 330px }</style></head>
+<body>
+<canvas id="c" width="400" height="200"></canvas>
+<p id="out">Nothing clicked</p>
+<script>
+  document.getElementById('c').addEventListener('click', function (event) {
+    document.getElementById('out').textContent = 'Canvas clicked at ' + Math.round(event.clientX) + ',' + Math.round(event.clientY);
+  });
+</script>
+</body></html>

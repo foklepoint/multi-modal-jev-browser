@@ -76,11 +76,33 @@ REMOVE_JS = r"""
 """
 
 
-async def draw_marks(page: Any, indices: list[int]) -> list[list[Any]]:
-    """Put the numbered boxes on the page and return the rectangles they were drawn at."""
+async def draw_marks(page: Any, indices: list[int], frames: dict[int, Any] | None = None, element_frame: dict[int, int] | None = None) -> list[list[Any]]:
+    """Put the numbered boxes on the page and return the rectangles they were drawn at.
+
+    `frames` maps a frame position to (Playwright frame, x, y) for the embedded frames that were read, and `element_frame` maps an
+    element index to its frame position. Boxes for elements inside a frame are measured in the frame and moved by the frame's offset,
+    then all of them are drawn on the top page."""
     if not indices:
         return []
-    rects = await page.evaluate(RECTS_JS, list(indices))
+    groups: dict[int, list[int]] = {}
+    for index in indices:
+        groups.setdefault((element_frame or {}).get(index, 0), []).append(index)
+    rects: list[list[Any]] = []
+    for position, members in groups.items():
+        if position == 0:
+            found = await page.evaluate(RECTS_JS, list(members))
+            rects.extend(found or [])
+            continue
+        entry = (frames or {}).get(position)
+        if entry is None:
+            continue
+        frame, offset_x, offset_y = entry
+        try:
+            found = await frame.evaluate(RECTS_JS, list(members))
+        except Exception:
+            continue
+        for item in found or []:
+            rects.append([item[0], item[1] + offset_x, item[2] + offset_y, item[3], item[4]])
     if not rects:
         return []
     await page.evaluate(DRAW_JS, rects)
@@ -95,10 +117,16 @@ async def remove_marks(page: Any) -> None:
         pass
 
 
-async def marked_screenshot(page: Any, indices: list[int], quality: int = 72) -> bytes | None:
+async def marked_screenshot(
+    page: Any,
+    indices: list[int],
+    quality: int = 72,
+    frames: dict[int, Any] | None = None,
+    element_frame: dict[int, int] | None = None,
+) -> bytes | None:
     """A JPEG of the viewport with one coloured box and index tag per element, or None if it cannot be drawn."""
     try:
-        rects = await draw_marks(page, indices)
+        rects = await draw_marks(page, indices, frames, element_frame)
         if not rects:
             return None
         raw = await page.screenshot(type="jpeg", quality=quality, animations="disabled", caret="hide")

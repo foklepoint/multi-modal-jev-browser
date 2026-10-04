@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Inner</title></head>
+<body style="font-family: Arial; margin: 12px">
+<label>Inner name <input id="n" type="text"></label>
+<button id="b" type="button">Save inner</button>
+<p id="out">Not saved</p>
+<script>
+  document.getElementById('b').addEventListener('click', function () {
+    document.getElementById('out').textContent = 'Saved: ' + document.getElementById('n').value;
+  });
+</script>
+</body></html>

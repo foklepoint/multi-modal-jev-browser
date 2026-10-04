@@ -98,6 +98,8 @@ class Browser:
         self.page: Any = None
         self.tracked: list[Any] = []
         self.seen: set[int] = set()
+        self.frame_map: dict[int, Any] = {}  # frame position -> (Playwright frame, x offset, y offset), from the last observation
+        self.element_frame: dict[int, int] = {}  # element index -> frame position, from the last observation
         self._started = False
 
     # --- lifecycle ---------------------------------------------------------------------------
@@ -256,14 +258,24 @@ class Browser:
     async def observe(self) -> Observation:
         """Read the working tab right now."""
         await self.recover_closed_tab()
-        return await observe(self.page)
+        observation = await observe(self.page)
+        self.frame_map = {info.position: (info.frame, info.x, info.y) for info in observation.frames}
+        self.element_frame = {element.index: element.frame for element in observation.elements if element.frame}
+        return observation
 
     async def marked_screenshot(self, indices: list[int]) -> bytes | None:
         """A JPEG of the viewport with a numbered box on each of these elements."""
-        raw = await marks.marked_screenshot(self.page, indices)
+        raw = await marks.marked_screenshot(self.page, indices, frames=self.frame_map, element_frame=self.element_frame)
         if raw is None:
             return None
         return raw
+
+    async def screenshot(self) -> bytes | None:
+        """A JPEG of the viewport exactly as it is, with no boxes on it."""
+        try:
+            return await self.page.screenshot(type="jpeg", quality=72, animations="disabled", caret="hide")
+        except Exception:
+            return None
 
     async def current_url(self) -> str:
         try:
@@ -279,8 +291,17 @@ class Browser:
 
     # --- acting -------------------------------------------------------------------------------
 
+    def _frame_of(self, index: int) -> Any:
+        """The frame an element lives in: the page's main frame, or the embedded frame it was read from."""
+        position = self.element_frame.get(index, 0)
+        entry = self.frame_map.get(position) if position else None
+        if entry is None:
+            return self.page.main_frame
+        return entry[0]
+
     async def _element(self, index: int) -> Any:
-        handle = await self.page.evaluate_handle("(index) => (window.__mmjb && window.__mmjb.nodes) ? window.__mmjb.nodes[index] : null", index)
+        frame = self._frame_of(index)
+        handle = await frame.evaluate_handle("(index) => (window.__mmjb && window.__mmjb.nodes) ? window.__mmjb.nodes[index] : null", index)
         element = handle.as_element()
         if element is None:
             raise BrowserError(
@@ -324,7 +345,7 @@ class Browser:
 
     async def type_text(self, index: int, text: str) -> None:
         """Replace whatever is in the field with this text: focus, select all, insert."""
-        focused = await self.page.evaluate(self.FOCUS_JS, index)
+        focused = await self._frame_of(index).evaluate(self.FOCUS_JS, index)
         if not focused:
             raise BrowserError(f"element {index} is not on the page any more. Call look() again for the current element numbers.")
         await self.page.keyboard.insert_text(text)
@@ -396,6 +417,29 @@ class Browser:
     async def press(self, key: str) -> None:
         """Press a key such as Enter, Tab or Escape."""
         await self.page.keyboard.press(key)
+
+    async def click_at(self, x: float, y: float) -> None:
+        """A real mouse click at a point of the viewport, in screenshot pixels. For canvases, challenge widgets and anything the element list cannot name."""
+        box = self.page.viewport_size or {"width": 1280, "height": 800}
+        if x < 0 or y < 0 or x > box["width"] or y > box["height"]:
+            raise BrowserError(f"({x:.0f}, {y:.0f}) is outside the {box['width']} by {box['height']} viewport.")
+        await self.page.mouse.move(x, y)
+        await self.page.wait_for_timeout(60)
+        await self.page.mouse.click(x, y)
+
+    async def drag(self, x: float, y: float, to_x: float, to_y: float) -> None:
+        """Press at one point, move to another in steps and release. For sliders, sortable lists and drag and drop targets."""
+        box = self.page.viewport_size or {"width": 1280, "height": 800}
+        for value, limit in ((x, box["width"]), (to_x, box["width"]), (y, box["height"]), (to_y, box["height"])):
+            if value < 0 or value > limit:
+                raise BrowserError(f"the drag leaves the {box['width']} by {box['height']} viewport.")
+        await self.page.mouse.move(x, y)
+        await self.page.mouse.down()
+        await self.page.mouse.move(x + (to_x - x) * 0.25, y + (to_y - y) * 0.25, steps=6)
+        await self.page.mouse.move(x + (to_x - x) * 0.75, y + (to_y - y) * 0.75, steps=6)
+        await self.page.mouse.move(to_x, to_y, steps=6)
+        await self.page.wait_for_timeout(80)
+        await self.page.mouse.up()
 
     async def go_back(self) -> bool:
         """Go back one entry in this tab's history."""

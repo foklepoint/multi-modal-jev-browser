@@ -19,7 +19,7 @@ from mmjb.agent import Agent
 pytestmark = pytest.mark.live
 
 GOAL = "Open the submission form in a new tab, fill it in with the facts and send it."
-FACTS = {"name": "Ada Lovelace", "message": "This tool is worth a directory listing."}
+FACTS = {"name": "Ada Lovelace", "message": "I would like to hear more."}
 
 
 def clef_ready() -> bool:

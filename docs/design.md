@@ -50,6 +50,23 @@ This is the one place where the design gives the model a slightly weaker questio
 (a question about the field it has just been told about). It buys one call per step, which is the
 whole point of the project. It is recorded here so a future change can revisit it knowingly.
 
+## Reaching what the list cannot name
+
+The element list covers the top document and every attached frame that is big enough to hold a control and is on screen. A frame's elements
+get the next numbers, so one list and one screenshot cover the page and its frames; the frame's text is added to the page text, so a confirmation
+that appears inside a frame still counts. Boxes for frame elements are measured in the frame and moved by the frame's offset.
+
+Some things have no element at all: a canvas, tiles drawn as plain boxes, a slider handle, a menu that opens from the keyboard. Only the fallback
+model chooses `click_at`, `drag` and `press`, because they need to read pixels. It is given the plain screenshot as well as the numbered one, and the
+viewport size, since the numbered boxes can cover the thing it wants to hit. When the decision model's menu has no operation on an element (the
+page has no controls, or only fields no fact can fill) the fallback decides the step instead of a model choosing between waiting and going back.
+
+Points, drags and key presses cannot be checked against a label, so they count as writes: off until `allow_writes` is on, and a custom policy sees
+them as `click_at`, `drag` and `press` with no element.
+
+A goal such as "drag the box into the zone" ends with no thank-you text. When the fallback model says the goal is met twice, after steps that
+changed the page, the run is `verified`; a single claim with no confirmation still is not.
+
 ## Following tabs
 
 A click that opens a new tab leaves the agent on the old one, where nothing changes until the loop

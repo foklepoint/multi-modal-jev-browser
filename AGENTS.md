@@ -77,6 +77,8 @@ goto(url="https://example.com/pricing")
 back()
 
 press(key="Enter")
+click_at(x=320, y=180)
+drag(x=90, y=175, to_x=500, to_y=180)
 
 status()
 
