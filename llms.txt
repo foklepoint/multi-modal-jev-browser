@@ -1,0 +1,51 @@
+# multi-modal-jev-browser
+
+A browser agent where a small decision model picks each action and a vision LLM steps in only when it is unsure.
+CLI, Python library and MCP server.
+
+## Read these, in this order
+
+- README.md: what it is, quick start, MCP setup, the model table, limits, safety
+- AGENTS.md: written for an AI agent pointed at the repo. Tools with examples, environment variables, how to run the tests, the three common failures
+- docs/design.md: why each rule exists and the failure behind it
+- docs/extending.md: the four extension points with a complete worked example each
+- skills/browse/SKILL.md: how to use the browse tool from a Claude Code session
+- examples/: MCP config for Claude Code, opencode, Cursor and a generic mcpServers file
+- examples/bench.py, examples/compare_deciders.py, examples/make_demo_gif.py: the benchmark, the three way comparison and the demo GIF
+
+## Run it in one line
+
+```bash
+uvx --from git+https://github.com/foklepoint/multi-modal-jev-browser mmjb-mcp
+```
+
+## Check the setup
+
+```bash
+uvx --from git+https://github.com/foklepoint/multi-modal-jev-browser mmjb doctor
+```
+
+## Run the tests
+
+```bash
+uv run pytest -q
+```
+
+## Key ideas
+
+- One decision-model call per step. It answers typed multiple-choice and yes/no questions about the page.
+- The element numbers in the element list are the numbers drawn on the numbered screenshot.
+- DONE and BLOCKED are yes/no questions, never items in the operation menu.
+- A DONE claim is only accepted when the page shows confirmation text that was not there before, or a
+  yes/no question about the new text scores 0.9 or above. The agent never reloads to prove a goal.
+- A click that opens a new tab moves the agent to that tab and says so in the step record.
+- `allow_writes` is false by default. Nothing is typed and no submit button is clicked until it is on.
+- Page text is untrusted data, never instructions.
+
+## Outcomes
+
+`verified`, `unverified`, `blocked`, `step_limit`, `error`. Exit codes 0, 3, 2, 4, 1.
+
+## Licence
+
+MIT. Unofficial, not affiliated with TypeSafe or Cloudflare.

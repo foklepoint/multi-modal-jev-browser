@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A form whose submit starts disabled</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; }
+label { display: block; margin: 14px 0 4px 0; }
+input { width: 320px; font-size: 14px; }
+button { margin-top: 16px; padding: 6px 14px; }
+</style>
+</head>
+<body>
+<h1>Locked submit</h1>
+<p>The send button cannot be clicked until both fields are filled.</p>
+<label for="first">First field</label>
+<input type="text" id="first" name="first">
+<label for="second">Second field</label>
+<input type="text" id="second" name="second">
+<button type="button" id="locked-send" disabled>Send</button>
+<p id="result"></p>
+<script>
+function refresh() {
+  var ready = document.getElementById('first').value.trim() && document.getElementById('second').value.trim();
+  document.getElementById('locked-send').disabled = !ready;
+}
+document.getElementById('first').addEventListener('input', refresh);
+document.getElementById('second').addEventListener('input', refresh);
+document.getElementById('locked-send').addEventListener('click', function () {
+  document.getElementById('result').textContent = 'Both fields were filled, so the button worked.';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Submission form</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; }
+label { display: block; margin: 14px 0 4px 0; }
+input[type=text], textarea, select { width: 320px; font-size: 14px; }
+textarea { height: 70px; }
+button { margin-top: 16px; font-size: 15px; padding: 6px 14px; }
+#confirmation { display: none; border: 2px solid #2a7; padding: 12px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<h1>Submission form</h1>
+<p>Fill every field and submit.</p>
+<form id="the-form" onsubmit="return submitForm(event)">
+  <label for="name">Your name</label>
+  <input type="text" id="name" name="name" required>
+
+  <label for="message">Your message</label>
+  <textarea id="message" name="message" required></textarea>
+
+  <label for="category">Category</label>
+  <select id="category" name="category" required>
+    <option value="">Choose one</option>
+    <option value="tools">Tools</option>
+    <option value="services">Services</option>
+    <option value="other">Other</option>
+  </select>
+
+  <label><input type="checkbox" id="terms" name="terms"> I accept the terms</label>
+
+  <button type="submit" id="submit">Send the form</button>
+</form>
+<div id="confirmation" role="status">Thanks! We will review it.</div>
+<script>
+// The confirmation is never stored anywhere, so a reload loses it. That is the point.
+function submitForm(event) {
+  event.preventDefault();
+  var message = document.getElementById('message').value.trim();
+  var name = document.getElementById('name').value.trim();
+  var category = document.getElementById('category').value;
+  var terms = document.getElementById('terms').checked;
+  var box = document.getElementById('confirmation');
+  if (!name || !message || !category || !terms) {
+    box.style.display = 'block';
+    box.style.borderColor = '#c44';
+    box.textContent = 'Please fill in every field and accept the terms.';
+    return false;
+  }
+  box.style.display = 'block';
+  box.style.borderColor = '#2a7';
+  box.textContent = 'Thanks! We will review it.';
+  return false;
+}
+</script>
+</body>
+</html>

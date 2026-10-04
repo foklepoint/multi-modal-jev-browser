@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Create an account - Acme Cloud</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><span class="logo">Acme Cloud</span><nav><a href="#">Pricing</a><a href="#">Sign in</a></nav></header>
+<div class="form-wrap">
+  <h1>Create an account</h1>
+  <form id="form">
+    <label for="email">Email</label><input type="email" id="email" required>
+    <label for="password">Password</label><input type="password" id="password" required>
+    <label for="again">Repeat the password</label><input type="password" id="again" required>
+    <label for="country">Country</label>
+    <select id="country" required><option value="">Choose one</option><option>Argentina</option><option>Australia</option><option>Austria</option><option>Belgium</option><option>Brazil</option><option>Canada</option><option>Chile</option><option>China</option><option>Colombia</option><option>Czechia</option><option>Denmark</option><option>Egypt</option><option>Finland</option><option>France</option><option>Germany</option><option>Greece</option><option>India</option><option>Indonesia</option><option>Ireland</option><option>Israel</option><option>Italy</option><option>Japan</option><option>Kenya</option><option>Mexico</option><option>Netherlands</option><option>New Zealand</option><option>Nigeria</option><option>Norway</option><option>Peru</option><option>Poland</option><option>Portugal</option><option>Singapore</option><option>South Africa</option><option>South Korea</option><option>Spain</option><option>Sweden</option><option>Switzerland</option><option>Turkey</option><option>United Kingdom</option><option>United States</option></select>
+    <label>Account type</label>
+    <div class="radios">
+      <label><input type="radio" name="kind" value="Personal"> Personal</label>
+      <label><input type="radio" name="kind" value="Company"> Company</label>
+    </div>
+    <label class="check"><input type="checkbox" id="terms" required> I accept the terms of service</label>
+    <p><button class="button" id="create" type="submit" disabled>Create account</button></p>
+  </form>
+  <div class="notice" id="notice"></div>
+</div>
+<script src="common.js"></script>
+<script>
+  var form = document.getElementById('form');
+  var create = document.getElementById('create');
+  function check() {
+    var kind = document.querySelector('input[name=kind]:checked');
+    create.disabled = !(form.checkValidity() && kind && document.getElementById('password').value === document.getElementById('again').value);
+  }
+  form.addEventListener('input', check);
+  form.addEventListener('change', check);
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var values = { email: document.getElementById('email').value, password: document.getElementById('password').value, again: document.getElementById('again').value,
+      country: document.getElementById('country').value, kind: document.querySelector('input[name=kind]:checked').value, terms: document.getElementById('terms').checked };
+    post('t5', values).then(function () { form.reset(); check(); showNotice('Your account was created. Welcome aboard!'); });
+  });
+</script>
+</body></html>

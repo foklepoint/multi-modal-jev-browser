@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "mmjb": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/foklepoint/multi-modal-jev-browser",
+        "mmjb-mcp"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "your_cloudflare_token",
+        "CLOUDFLARE_ACCOUNT_ID": "your_account_id"
+      }
+    }
+  }
+}

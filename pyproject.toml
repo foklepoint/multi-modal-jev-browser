@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mmjb"
+version = "0.1.0"
+description = "A browser agent where a small decision model picks each action and a vision LLM steps in only when it is unsure"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [{ name = "Saurabh Sharma" }]
+keywords = ["browser-agent", "playwright", "mcp", "llm", "automation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Testing",
+]
+dependencies = [
+  "playwright>=1.47",
+  "litellm>=1.55",
+  "httpx>=0.27",
+  "mcp>=1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
+]
+
+[project.scripts]
+mmjb = "mmjb.cli:main"
+mmjb-mcp = "mmjb.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/foklepoint/multi-modal-jev-browser"
+Repository = "https://github.com/foklepoint/multi-modal-jev-browser"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mmjb"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "live: needs a real decision model and its API keys; skipped unless the keys are set",
+  "slow: takes more than a few seconds",
+]
+filterwarnings = ["ignore::DeprecationWarning"]

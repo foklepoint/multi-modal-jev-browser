@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Create your workspace - Acme Cloud</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><span class="logo">Acme Cloud</span><nav><a href="#">Pricing</a><a href="#">Sign in</a></nav></header>
+<div class="form-wrap">
+  <h1>Create your workspace</h1>
+  <div class="steps"><span id="s1" class="on">1 Account</span><span id="s2">2 Plan</span><span id="s3">3 Confirm</span></div>
+  <div id="step1">
+    <label for="email">Work email</label><input type="email" id="email">
+    <p><button class="button" type="button" id="next1">Continue</button></p>
+  </div>
+  <div id="step2" style="display:none">
+    <label for="name">Your name</label><input type="text" id="name">
+    <label>Plan</label>
+    <div class="radios">
+      <label><input type="radio" name="plan" value="Starter"> Starter</label>
+      <label><input type="radio" name="plan" value="Team"> Team</label>
+      <label><input type="radio" name="plan" value="Business"> Business</label>
+    </div>
+    <p><button class="button" type="button" id="next2">Continue</button></p>
+  </div>
+  <div id="step3" style="display:none">
+    <p class="sub">Review your details, then confirm to create the workspace.</p>
+    <p id="summary"></p>
+    <label class="check"><input type="checkbox" id="confirm"> I confirm these details are correct</label>
+    <p><button class="button" type="button" id="finish" disabled>Create workspace</button></p>
+  </div>
+  <div class="notice" id="notice"></div>
+</div>
+<script src="common.js"></script>
+<script>
+  function show(step) {
+    ['1', '2', '3'].forEach(function (id) {
+      document.getElementById('step' + id).style.display = id === String(step) ? 'block' : 'none';
+      document.getElementById('s' + id).className = id === String(step) ? 'on' : '';
+    });
+  }
+  document.getElementById('next1').addEventListener('click', function () { if (document.getElementById('email').value.indexOf('@') > 0) { show(2); } });
+  document.getElementById('next2').addEventListener('click', function () {
+    var plan = document.querySelector('input[name=plan]:checked');
+    if (document.getElementById('name').value && plan) {
+      document.getElementById('summary').textContent = document.getElementById('email').value + ' / ' + document.getElementById('name').value + ' / ' + plan.value + ' plan';
+      show(3);
+    }
+  });
+  document.getElementById('confirm').addEventListener('change', function () { document.getElementById('finish').disabled = !this.checked; });
+  document.getElementById('finish').addEventListener('click', function () {
+    var values = { email: document.getElementById('email').value, name: document.getElementById('name').value,
+      plan: document.querySelector('input[name=plan]:checked').value, confirm: document.getElementById('confirm').checked };
+    post('t3', values).then(function () { document.getElementById('step3').style.display = 'none'; showNotice('Your workspace was created. Check your email to finish.'); });
+  });
+</script>
+</body></html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Partner application - Acme Cloud</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><span class="logo">Acme Cloud</span><nav><a href="#">Pricing</a><a href="#">Partners</a></nav></header>
+<div class="form-wrap">
+  <h1>Partner application</h1>
+  <p class="sub">Apply to the partner program. We read every application.</p>
+  <form id="form">
+    <label for="first">First name</label><input type="text" id="first" required>
+    <label for="last">Last name</label><input type="text" id="last" required>
+    <label for="email">Email</label><input type="email" id="email" required>
+    <label for="phone">Phone</label><input type="text" id="phone" required>
+    <div class="gap"></div>
+    <label for="company">Company</label><input type="text" id="company" required>
+    <label for="role">Your role</label>
+    <select id="role" required><option value="">Choose one</option><option>Founder</option><option>Engineer</option><option>Designer</option><option>Marketer</option><option>Other</option></select>
+    <label for="country">Country</label>
+    <select id="country" required><option value="">Choose one</option><option>Argentina</option><option>Australia</option><option>Austria</option><option>Belgium</option><option>Brazil</option><option>Canada</option><option>Chile</option><option>China</option><option>Colombia</option><option>Czechia</option><option>Denmark</option><option>Egypt</option><option>Finland</option><option>France</option><option>Germany</option><option>Greece</option><option>India</option><option>Indonesia</option><option>Ireland</option><option>Israel</option><option>Italy</option><option>Japan</option><option>Kenya</option><option>Mexico</option><option>Netherlands</option><option>New Zealand</option><option>Nigeria</option><option>Norway</option><option>Peru</option><option>Poland</option><option>Portugal</option><option>Singapore</option><option>South Africa</option><option>South Korea</option><option>Spain</option><option>Sweden</option><option>Switzerland</option><option>Turkey</option><option>United Kingdom</option><option>United States</option></select>
+    <div class="gap"></div>
+    <label for="message">Why do you want to partner with us?</label><textarea id="message" required></textarea>
+    <label class="check"><input type="checkbox" id="consent" required> I agree to the partner terms</label>
+    <p><button class="button" type="submit">Submit application</button></p>
+  </form>
+  <div class="notice" id="notice"></div>
+</div>
+<script src="common.js"></script>
+<script>
+  document.getElementById('form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var ids = ['first', 'last', 'email', 'phone', 'company', 'role', 'country', 'message'];
+    var values = {};
+    ids.forEach(function (id) { values[id] = document.getElementById(id).value; });
+    values.consent = document.getElementById('consent').checked;
+    post('t4', values).then(function () { document.getElementById('form').reset(); showNotice('Thanks! Your application was received and is under review.'); });
+  });
+</script>
+</body></html>

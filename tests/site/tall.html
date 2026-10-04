@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A long page</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; }
+.filler p { margin: 0 0 22px 0; }
+</style>
+</head>
+<body>
+<h1>A long page</h1>
+<p>The content is long enough that the page scrolls.</p>
+<div class="filler" id="filler"></div>
+<a href="index.html">Back to the test site home</a>
+<button type="button" id="bottom-button">The button at the bottom</button>
+<script>
+// Deterministic filler, so the page is the same height on every run.
+var filler = document.getElementById('filler');
+for (var index = 1; index <= 220; index++) {
+  var paragraph = document.createElement('p');
+  paragraph.textContent = 'Paragraph ' + index + '. This is filler text so the page is taller than the window.';
+  filler.appendChild(paragraph);
+}
+</script>
+</body>
+</html>
